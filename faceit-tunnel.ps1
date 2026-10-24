@@ -33,6 +33,9 @@ $ProxyDomains   = @('faceit.com', 'faceit-cdn.net', 'faceit.gg', 'challenges.clo
 $ProxyCidrs     = @('193.41.200.0/24')
 # Процессы: приложение и античит. Весь их трафик идёт через VPN.
 $ProxyProcesses = @('FACEIT.exe', 'faceitclient.exe', 'faceitservice.exe')
+# Адреса для TUN-адаптера: берётся первый, который не занят другим VPN
+# (Happ и многие клиенты на sing-box по умолчанию используют 172.19.0.1).
+$TunAddresses   = @('172.23.233.1/30', '10.211.233.1/30', '192.168.233.1/30')
 # -----------------------------------------------------------------------------
 
 function Write-Info($msg) { Write-Host $msg -ForegroundColor Cyan }
@@ -221,7 +224,16 @@ function New-ProxyOutbound($s) {
     $out
 }
 
-function New-Config($s) {
+function Get-FreeTunAddress {
+    foreach ($cidr in $TunAddresses) {
+        $ip = $cidr.Split('/')[0]
+        if (-not (Get-NetIPAddress -IPAddress $ip -ErrorAction SilentlyContinue)) { return $cidr }
+    }
+    throw ('Все адреса для TUN заняты другими сетевыми адаптерами. Отключите другие VPN ' +
+           'или допишите свободный адрес в $TunAddresses в начале скрипта.')
+}
+
+function New-Config($s, $tunAddress) {
     [ordered]@{
         log       = [ordered]@{ level = 'info'; timestamp = $true }
         dns       = [ordered]@{
@@ -232,7 +244,7 @@ function New-Config($s) {
             type           = 'tun'
             tag            = 'tun-in'
             interface_name = 'faceit-tunnel'
-            address        = @('172.19.0.1/30')
+            address        = @($tunAddress)
             mtu            = 9000
             auto_route     = $true
             strict_route   = $false
@@ -289,7 +301,15 @@ if ($servers.Count -eq 0) {
 $server = Select-Server $servers
 Write-Info "Сервер: $($server.Name)"
 
-$json = ConvertTo-Json -InputObject (New-Config $server) -Depth 20
+# Прошлый запуск мог остаться висеть и держать TUN-адаптер — тогда новый не поднимется.
+$stale = Get-Process -Name 'sing-box' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $SingBox }
+if ($stale -and -not $CheckOnly) {
+    Write-Warn 'Останавливаю sing-box, оставшийся от прошлого запуска...'
+    $stale | Stop-Process -Force
+    Start-Sleep -Seconds 2
+}
+
+$json = ConvertTo-Json -InputObject (New-Config $server (Get-FreeTunAddress)) -Depth 20
 [IO.File]::WriteAllText($ConfigFile, $json, (New-Object Text.UTF8Encoding($false)))
 
 & $SingBox check -c $ConfigFile
