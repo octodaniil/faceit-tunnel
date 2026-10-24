@@ -1,5 +1,10 @@
 {
   "domains": ["faceit.com", "faceit-cdn.net", "faceit.gg", "challenges.cloudflare.com"],
   "cidrs": ["193.41.200.0/24"],
-  "processes": ["FACEIT.exe", "faceitclient.exe", "faceitservice.exe"]
+  "processes": ["FACEIT.exe", "faceitclient.exe", "faceitservice.exe"],
+  "hosts": [
+    "www.faceit.com", "api.faceit.com", "open.faceit.com", "edge.faceit.com", "accounts.faceit.com",
+    "ac-client-ws.faceit.com", "cdn.faceit.com", "cdn-frontend.faceit-cdn.net", "assets.faceit-cdn.net",
+    "faceit.gg", "challenges.cloudflare.com"
+  ]
 }

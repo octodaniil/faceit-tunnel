@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Text.Json.Nodes;
 
 namespace FaceitTunnel.Core;
@@ -68,6 +71,9 @@ public static class ConfigBuilder
                     ["address"] = new JsonArray { FreeTunAddress() },
                     ["mtu"] = 9000,
                     ["auto_route"] = true,
+                    // Только адреса Faceit: игра и всё остальное не проходят через sing-box вовсе
+                    // (без этого CS2 получал лишнюю задержку), а более узкие маршруты побеждают другие VPN.
+                    ["route_address"] = Array(RouteAddresses(rules)),
                     ["strict_route"] = false,
                     ["stack"] = "mixed",
                 },
@@ -144,6 +150,42 @@ public static class ConfigBuilder
                 throw new InvalidOperationException($"Транспорт «{s.Network}» не поддерживается. Выберите сервер с TCP, WS или gRPC.");
         }
         return outbound;
+    }
+
+    /// <summary>Диапазоны из правил плюс текущие IPv4-адреса хостов Faceit (/32).</summary>
+    public static string[] RouteAddresses(Rules rules)
+    {
+        var result = new List<string>(rules.Cidrs);
+        foreach (var host in rules.Hosts)
+        {
+            try
+            {
+                foreach (var ip in Dns.GetHostAddresses(host).Where(a => a.AddressFamily == AddressFamily.InterNetwork))
+                {
+                    if (!rules.Cidrs.Any(c => InCidr(ip, c))) result.Add($"{ip}/32");
+                }
+            }
+            catch (SocketException)
+            {
+                // Хост не резолвится — его трафик пойдёт напрямую, остальные правила продолжают работать.
+            }
+        }
+        return result.Distinct().ToArray();
+    }
+
+    private static bool InCidr(IPAddress ip, string cidr)
+    {
+        var parts = cidr.Split('/');
+        if (parts.Length != 2 || !IPAddress.TryParse(parts[0], out var net) || net.AddressFamily != ip.AddressFamily) return false;
+        var bits = int.Parse(parts[1]);
+        var a = ip.GetAddressBytes();
+        var b = net.GetAddressBytes();
+        for (var i = 0; i < a.Length && bits > 0; i++, bits -= 8)
+        {
+            var mask = bits >= 8 ? 0xFF : (byte)(0xFF << (8 - bits));
+            if ((a[i] & mask) != (b[i] & mask)) return false;
+        }
+        return true;
     }
 
     private static string FreeTunAddress()

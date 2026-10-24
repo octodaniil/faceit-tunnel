@@ -18,6 +18,17 @@ public sealed class Rules
     public string[] Cidrs { get; set; } = { "193.41.200.0/24" };
     public string[] Processes { get; set; } = { "FACEIT.exe", "faceitclient.exe", "faceitservice.exe" };
 
+    /// <summary>
+    /// Адреса этих хостов определяются при подключении и вместе с <see cref="Cidrs"/> становятся
+    /// единственными маршрутами в туннель — игра и остальной трафик идут мимо sing-box.
+    /// </summary>
+    public string[] Hosts { get; set; } =
+    {
+        "www.faceit.com", "api.faceit.com", "open.faceit.com", "edge.faceit.com", "accounts.faceit.com",
+        "ac-client-ws.faceit.com", "cdn.faceit.com", "cdn-frontend.faceit-cdn.net", "assets.faceit-cdn.net",
+        "faceit.gg", "challenges.cloudflare.com",
+    };
+
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>Кэш с прошлого запуска, иначе встроенные значения.</summary>
