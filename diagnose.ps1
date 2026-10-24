@@ -110,8 +110,27 @@ $procs = Get-Process -Name $watch -ErrorAction SilentlyContinue | Select-Object 
 Out-Report ("Запущено из важного: " + ($procs -join ', '))
 Out-Report ''
 
+Out-Report '=== 0. Контроль: обычные сайты (должны быть OK)'
+foreach ($u in 'https://ya.ru/', 'https://www.cloudflare.com/') { Out-Report (Test-Url $u $null) }
+Out-Report ''
+
 Out-Report '=== 1. Напрямую, без обхода'
 foreach ($h in $Hosts) { Out-Report (Test-Url "https://$h/" $null) }
+Out-Report ''
+
+# Тот же сервер Faceit, но с чужим именем сайта в TLS. Если и так зависает —
+# блокируют весь IP-адрес, и фрагментация/zapret не помогут, нужен VPN.
+Out-Report '=== 1b. Сервер Faceit под чужим именем (example.com)'
+$faceitIp = (Resolve-DnsName 'www.faceit.com' -Type A -ErrorAction SilentlyContinue | Where-Object IPAddress | Select-Object -First 1).IPAddress
+if ($faceitIp) {
+    $out = & curl.exe -s -k -o NUL -m 12 -w '%{http_code} %{time_total}s' --connect-to "example.com:443:${faceitIp}:443" 'https://example.com/'
+    $verdict = 'OK — блокируют по имени faceit.com'
+    if ($LASTEXITCODE -eq 28) { $verdict = 'ЗАВИСАЕТ — блокируют весь IP Faceit' }
+    elseif ($LASTEXITCODE -ne 0) { $verdict = "ОШИБКА curl $LASTEXITCODE" }
+    Out-Report ('{0,-28} {1,-14} {2}' -f $faceitIp, $out, $verdict)
+} else {
+    Out-Report 'Не удалось узнать IP www.faceit.com'
+}
 Out-Report ''
 
 Out-Report '=== 2. Без VPN, с фрагментацией TLS (режим start-direct.bat)'
