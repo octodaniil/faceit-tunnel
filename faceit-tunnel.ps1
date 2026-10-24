@@ -4,9 +4,15 @@
   Ядро: sing-box (https://github.com/SagerNet/sing-box), режим TUN.
 
   Запуск: start.bat (сам попросит права администратора).
+  Без VPN, с вашим IP (обход блокировки фрагментацией TLS): start-direct.bat.
   Сменить подписку или сервер: change-subscription.bat.
 #>
 param(
+    # vpn    — трафик Faceit идёт через VPN-сервер из подписки;
+    # direct — без VPN: трафик Faceit идёт напрямую с вашего IP, а блокировку
+    #          обходит фрагментация TLS (как zapret). Faceit видит вашу страну.
+    [ValidateSet('vpn', 'direct')]
+    [string]$Mode = 'vpn',
     [switch]$Reset,          # заново спросить подписку и сервер
     [switch]$CheckOnly,      # только собрать и проверить config.json, не подключаться
     [string]$Subscription    # подписка без вопроса: ссылка https://..., vless://... или путь к файлу
@@ -233,7 +239,36 @@ function Get-FreeTunAddress {
            'или допишите свободный адрес в $TunAddresses в начале скрипта.')
 }
 
+# $s — сервер из подписки (режим vpn) или $null (режим direct).
 function New-Config($s, $tunAddress) {
+    $matchers = @(
+        [ordered]@{ process_name = $ProxyProcesses },
+        [ordered]@{ domain_suffix = $ProxyDomains },
+        [ordered]@{ ip_cidr = $ProxyCidrs }
+    )
+    $rules = New-Object Collections.ArrayList
+    [void]$rules.Add([ordered]@{ action = 'sniff' })
+    [void]$rules.Add([ordered]@{ ip_is_private = $true; outbound = 'direct' })
+    if ($s) {
+        $outbounds = @((New-ProxyOutbound $s), [ordered]@{ type = 'direct'; tag = 'direct' })
+        foreach ($m in $matchers) {
+            $m.outbound = 'proxy'
+            [void]$rules.Add($m)
+        }
+    } else {
+        $outbounds = @([ordered]@{ type = 'direct'; tag = 'direct' })
+        # QUIC так не фрагментируется — отклоняем его, браузер сам перейдёт на TCP.
+        [void]$rules.Add([ordered]@{ protocol = 'quic'; domain_suffix = $ProxyDomains; action = 'reject' })
+        [void]$rules.Add([ordered]@{ protocol = 'quic'; ip_cidr = $ProxyCidrs; action = 'reject' })
+        foreach ($m in $matchers) {
+            $m.action = 'route'
+            $m.outbound = 'direct'
+            $m.tls_fragment = $true
+            $m.tls_record_fragment = $true
+            [void]$rules.Add($m)
+        }
+    }
+
     [ordered]@{
         log       = [ordered]@{ level = 'info'; timestamp = $true }
         dns       = [ordered]@{
@@ -250,19 +285,10 @@ function New-Config($s, $tunAddress) {
             strict_route   = $false
             stack          = 'mixed'
         })
-        outbounds = @(
-            (New-ProxyOutbound $s),
-            [ordered]@{ type = 'direct'; tag = 'direct' }
-        )
+        outbounds = $outbounds
         route     = [ordered]@{
-            rules                   = @(
-                [ordered]@{ action = 'sniff' },
-                [ordered]@{ ip_is_private = $true; outbound = 'direct' },
-                [ordered]@{ process_name = $ProxyProcesses; outbound = 'proxy' },
-                [ordered]@{ domain_suffix = $ProxyDomains; outbound = 'proxy' },
-                [ordered]@{ ip_cidr = $ProxyCidrs; outbound = 'proxy' }
-            )
-            final                   = 'direct'
+            rules                   = $rules.ToArray()
+            final                  = 'direct'
             auto_detect_interface   = $true
             default_domain_resolver = 'dns-direct'
         }
@@ -279,27 +305,32 @@ if (-not $CheckOnly -and -not $isAdmin) {
 
 Install-SingBox
 
-if ($Subscription) {
-    $src = $Subscription
-} elseif (-not $Reset -and (Test-Path -LiteralPath $SubFile)) {
-    $src = [IO.File]::ReadAllText($SubFile).Trim()
-} else {
-    Write-Info 'Вставьте ссылку на подписку (https://...) или ссылку на сервер (vless://...) и нажмите Enter.'
-    Write-Info 'Вставка в этом окне — правой кнопкой мыши.'
-    $src = (Read-Host 'Подписка').Trim()
-    [IO.File]::WriteAllText($SubFile, $src)
-    if (Test-Path -LiteralPath $ServerFile) { Remove-Item -LiteralPath $ServerFile }
-}
+$server = $null
+if ($Mode -eq 'vpn') {
+    if ($Subscription) {
+        $src = $Subscription
+    } elseif (-not $Reset -and (Test-Path -LiteralPath $SubFile)) {
+        $src = [IO.File]::ReadAllText($SubFile).Trim()
+    } else {
+        Write-Info 'Вставьте ссылку на подписку (https://...) или ссылку на сервер (vless://...) и нажмите Enter.'
+        Write-Info 'Вставка в этом окне — правой кнопкой мыши.'
+        $src = (Read-Host 'Подписка').Trim()
+        [IO.File]::WriteAllText($SubFile, $src)
+        if (Test-Path -LiteralPath $ServerFile) { Remove-Item -LiteralPath $ServerFile }
+    }
 
-Write-Info 'Загружаю подписку...'
-# @() обязателен: один сервер PowerShell 5.1 вернёт как объект без .Count
-$servers = @(Get-Servers (Get-SubscriptionText $src))
-if ($servers.Count -eq 0) {
-    throw ('В подписке не найдено серверов VLESS. Можно скопировать ссылку на сервер (vless://...) ' +
-           'в Happ и вставить её вместо подписки через change-subscription.bat.')
+    Write-Info 'Загружаю подписку...'
+    # @() обязателен: один сервер PowerShell 5.1 вернёт как объект без .Count
+    $servers = @(Get-Servers (Get-SubscriptionText $src))
+    if ($servers.Count -eq 0) {
+        throw ('В подписке не найдено серверов VLESS. Можно скопировать ссылку на сервер (vless://...) ' +
+               'в Happ и вставить её вместо подписки через change-subscription.bat.')
+    }
+    $server = Select-Server $servers
+    Write-Info "Сервер: $($server.Name)"
+} else {
+    Write-Info 'Режим без VPN: Faceit идёт напрямую с вашего IP, блокировку обходит фрагментация TLS.'
 }
-$server = Select-Server $servers
-Write-Info "Сервер: $($server.Name)"
 
 # Прошлый запуск мог остаться висеть и держать TUN-адаптер — тогда новый не поднимется.
 $stale = Get-Process -Name 'sing-box' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $SingBox }
@@ -317,11 +348,15 @@ if ($LASTEXITCODE -ne 0) { throw 'sing-box не принял config.json (оши
 Write-Info 'config.json собран и проверен.'
 if ($CheckOnly) { return }
 
-$serverIp = $server.Server
-if ($serverIp -notmatch '^[\d.]+$') {
-    try { $serverIp = (Resolve-DnsName $server.Server -Type A | Where-Object IPAddress | Select-Object -First 1).IPAddress } catch { }
+if ($server) {
+    $serverIp = $server.Server
+    if ($serverIp -notmatch '^[\d.]+$') {
+        try { $serverIp = (Resolve-DnsName $server.Server -Type A | Where-Object IPAddress | Select-Object -First 1).IPAddress } catch { }
+    }
+    Write-Warn "Если работает zapret: добавьте $serverIp в lists\ipset-exclude.txt и перезапустите zapret."
+} else {
+    Write-Warn 'Если работает zapret: Faceit не должен быть в его списках (list-general.txt, ipset-all.txt).'
 }
-Write-Warn "Если работает zapret: добавьте $serverIp в lists\ipset-exclude.txt и перезапустите zapret."
 
 $others = Get-Process -Name 'Happ', 'xray', 'v2rayN', 'Hiddify', 'nekobox', 'Throne', 'clash-verge', 'FlClash', 'Proxifier' -ErrorAction SilentlyContinue
 if ($others) {
@@ -329,7 +364,7 @@ if ($others) {
 }
 
 Write-Host ''
-Write-Info 'Подключаюсь. Ниже видно, что идёт через VPN ([proxy]). Полный лог — в sing-box.log.'
+Write-Info 'Подключаюсь. Ниже зелёным видны соединения Faceit. Полный лог — в sing-box.log.'
 Write-Info 'Отключиться: Ctrl+C или закрыть окно.'
 Write-Host ''
 
@@ -345,7 +380,7 @@ try {
         $log.WriteLine($line)
         if ($line -match 'FATAL|ERROR') { Write-Host $line -ForegroundColor Red }
         elseif ($line -match 'WARN') { Write-Host $line -ForegroundColor Yellow }
-        elseif ($line -match '\[proxy\]|sing-box started') { Write-Host $line -ForegroundColor Green }
+        elseif ($line -match '\[proxy\]|faceit|193\.41\.200\.|sing-box started') { Write-Host $line -ForegroundColor Green }
     }
 } finally {
     $log.Dispose()
