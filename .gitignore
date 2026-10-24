@@ -4,3 +4,6 @@ server.txt
 config.json
 sing-box.log
 diag-report.txt
+obj/
+app/publish/
+app/Releases/

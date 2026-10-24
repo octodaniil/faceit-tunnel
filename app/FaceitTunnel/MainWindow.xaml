@@ -1,0 +1,293 @@
+<ui:FluentWindow
+    x:Class="FaceitTunnel.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="Faceit Tunnel"
+    Width="440"
+    Height="780"
+    MinWidth="400"
+    MinHeight="600"
+    Background="{StaticResource BgBrush}"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="None"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen"
+    FontFamily="{StaticResource BodyFont}"
+    Foreground="{StaticResource TextBrush}"
+    Icon="pack://application:,,,/Assets/app.ico">
+
+    <Grid x:Name="Root" Background="{StaticResource BgBrush}">
+        <Grid.RenderTransform>
+            <TranslateTransform x:Name="ContentT" />
+        </Grid.RenderTransform>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="" Background="Transparent" />
+
+        <!-- Шапка -->
+        <DockPanel Grid.Row="1" Margin="24,0,24,18">
+            <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="12" Padding="10,4"
+                    Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="StatusDot" Width="7" Height="7" VerticalAlignment="Center" Margin="0,0,7,0" />
+                    <TextBlock x:Name="StatusChipText" Text="Не подключено" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{StaticResource Text2Brush}" />
+                </StackPanel>
+            </Border>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Image Source="pack://application:,,,/Assets/app.ico" Width="22" Height="22" Margin="0,0,10,0" />
+                <TextBlock Text="Faceit Tunnel" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Вкладки -->
+        <Border Grid.Row="2" Margin="24,0,24,22" CornerRadius="11" Padding="3" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+            <Grid x:Name="NavGrid">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                    <ColumnDefinition />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="NavIndicator" CornerRadius="8" Background="#26262B">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="NavIndicatorT" />
+                    </Border.RenderTransform>
+                </Border>
+                <RadioButton x:Name="NavHome" Grid.Column="0" GroupName="Nav" Style="{StaticResource Segment}" Content="Главная"
+                             IsChecked="True" Checked="OnNavChecked" />
+                <RadioButton x:Name="NavLog" Grid.Column="1" GroupName="Nav" Style="{StaticResource Segment}" Content="Журнал"
+                             Checked="OnNavChecked" />
+                <RadioButton x:Name="NavSettings" Grid.Column="2" GroupName="Nav" Style="{StaticResource Segment}" Content="Настройки"
+                             Checked="OnNavChecked" />
+            </Grid>
+        </Border>
+
+        <Grid x:Name="PagesHost" Grid.Row="3">
+
+            <!-- ================= Главная ================= -->
+            <ScrollViewer x:Name="PageHome" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.RenderTransform>
+                    <TranslateTransform />
+                </ScrollViewer.RenderTransform>
+                <StackPanel Margin="24,0,24,20">
+
+                    <Border x:Name="UpdateBanner" Visibility="Collapsed" Style="{StaticResource Group}">
+                        <DockPanel Margin="16,12">
+                            <Button x:Name="UpdateButton" DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}"
+                                    Content="Обновить" Click="OnUpdateClick" />
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="Доступно обновление" FontWeight="SemiBold" FontSize="13" />
+                                <TextBlock x:Name="UpdateText" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Статус -->
+                    <TextBlock Text="Статус" Style="{StaticResource Hint}" Margin="2,6,0,4" />
+                    <TextBlock x:Name="StatusText" Text="Не подключено" FontFamily="{StaticResource DisplayFont}" FontSize="32"
+                               FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock x:Name="StatusSub" FontSize="14" Foreground="{StaticResource Text2Brush}" TextWrapping="Wrap"
+                               Margin="2,0,0,22" />
+
+                    <!-- Полоса прогресса при подключении -->
+                    <Border x:Name="ProgressTrack" Height="2" CornerRadius="1" Background="{StaticResource LineBrush}"
+                            Margin="0,0,0,14" ClipToBounds="True" Opacity="0">
+                        <Border x:Name="ProgressBar" Width="110" HorizontalAlignment="Left" CornerRadius="1" Background="{StaticResource AccentBrush}">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="ProgressT" />
+                            </Border.RenderTransform>
+                        </Border>
+                    </Border>
+
+                    <Button x:Name="ConnectButton" Style="{StaticResource PrimaryButton}" Click="OnConnectClick" Margin="0,0,0,28">
+                        <TextBlock x:Name="ConnectLabel" Text="Подключить" />
+                    </Button>
+
+                    <!-- Режим -->
+                    <TextBlock Text="Режим" Style="{StaticResource SectionLabel}" />
+                    <Border Style="{StaticResource Group}">
+                        <StackPanel>
+                            <Border BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+                                <RadioButton x:Name="ModeVpn" GroupName="Mode" Style="{StaticResource ChoiceRow}" Checked="OnModeChanged">
+                                    <StackPanel>
+                                        <TextBlock Text="Через VPN" Style="{StaticResource RowTitle}" />
+                                        <TextBlock Text="Faceit идёт через сервер из подписки" Style="{StaticResource Hint}" Margin="0,2,0,0" />
+                                    </StackPanel>
+                                </RadioButton>
+                            </Border>
+                            <RadioButton x:Name="ModeDirect" GroupName="Mode" Style="{StaticResource ChoiceRow}" Checked="OnModeChanged">
+                                <StackPanel>
+                                    <TextBlock Text="Без VPN" Style="{StaticResource RowTitle}" />
+                                    <TextBlock Text="Напрямую с обходом блокировки, Faceit видит ваш IP" Style="{StaticResource Hint}" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Сервер -->
+                    <StackPanel x:Name="ServerCard">
+                        <TextBlock Text="Сервер" Style="{StaticResource SectionLabel}" />
+                        <Border Style="{StaticResource Group}">
+                            <StackPanel Margin="12">
+                                <DockPanel>
+                                    <Button x:Name="RefreshButton" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="9,7"
+                                            Style="{StaticResource SecondaryButton}" ToolTip="Обновить список серверов" Click="OnRefreshServersClick">
+                                        <ui:SymbolIcon Symbol="ArrowSync24" FontSize="16" />
+                                    </Button>
+                                    <ComboBox x:Name="ServerCombo" SelectionChanged="OnServerChanged" />
+                                </DockPanel>
+                                <TextBlock x:Name="ServerHint" Style="{StaticResource Hint}" Margin="4,8,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Проверка Faceit -->
+                    <DockPanel Margin="0,0,0,0">
+                        <Button x:Name="CheckButton" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Проверить"
+                                Margin="0,0,4,8" Click="OnCheckClick" />
+                        <TextBlock Text="Faceit" Style="{StaticResource SectionLabel}" />
+                    </DockPanel>
+                    <Border Style="{StaticResource Group}">
+                        <StackPanel>
+                            <Border Style="{StaticResource Row}">
+                                <DockPanel>
+                                    <TextBlock x:Name="CountryText" DockPanel.Dock="Right" Text="—" Style="{StaticResource RowValue}" />
+                                    <TextBlock Text="Видит вас из" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource Row}">
+                                <DockPanel>
+                                    <TextBlock x:Name="IpText" DockPanel.Dock="Right" Text="—" Style="{StaticResource RowValue}"
+                                               FontFamily="{StaticResource MonoFont}" FontSize="13" />
+                                    <TextBlock Text="IP-адрес" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource Row}">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Ellipse x:Name="SiteDot" Width="7" Height="7" Fill="#3A3A42" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBlock x:Name="SiteText" Text="—" Style="{StaticResource RowValue}" />
+                                    </StackPanel>
+                                    <TextBlock Text="Сайт и приложение" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource LastRow}">
+                                <DockPanel>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Ellipse x:Name="AntiCheatDot" Width="7" Height="7" Fill="#3A3A42" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBlock x:Name="AntiCheatText" Text="—" Style="{StaticResource RowValue}" />
+                                    </StackPanel>
+                                    <TextBlock Text="Античит" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ================= Журнал ================= -->
+            <DockPanel x:Name="PageLog" Visibility="Collapsed" Margin="24,0,24,20">
+                <DockPanel.RenderTransform>
+                    <TranslateTransform />
+                </DockPanel.RenderTransform>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+                    <Button Style="{StaticResource SecondaryButton}" Content="Открыть полный лог" Click="OnOpenLogClick" />
+                    <Button Style="{StaticResource SecondaryButton}" Content="Очистить" Margin="8,0,0,0" Click="OnClearLogClick" />
+                </StackPanel>
+                <Border Style="{StaticResource Group}" Margin="0">
+                    <Grid>
+                        <ListBox x:Name="LogList" Background="Transparent" BorderThickness="0" Margin="0,4"
+                                 ItemContainerStyle="{StaticResource LogItemStyle}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="16,8">
+                                        <Ellipse DockPanel.Dock="Left" Width="6" Height="6" Fill="{Binding Brush}" VerticalAlignment="Top"
+                                                 Margin="0,6,10,0" />
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Time}" FontFamily="{StaticResource MonoFont}"
+                                                   FontSize="11" Foreground="{StaticResource MutedBrush}" Margin="10,2,0,0" />
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <StackPanel x:Name="LogEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False" Margin="24">
+                            <TextBlock Text="Пока пусто" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                            <TextBlock Text="После подключения здесь появятся соединения Faceit."
+                                       Style="{StaticResource Hint}" TextAlignment="Center" Margin="0,4,0,0" MaxWidth="240" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </DockPanel>
+
+            <!-- ================= Настройки ================= -->
+            <ScrollViewer x:Name="PageSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer.RenderTransform>
+                    <TranslateTransform />
+                </ScrollViewer.RenderTransform>
+                <StackPanel Margin="24,0,24,20">
+
+                    <TextBlock Text="Подписка" Style="{StaticResource SectionLabel}" />
+                    <Border Style="{StaticResource Group}">
+                        <StackPanel Margin="16,14">
+                            <ui:PasswordBox x:Name="SubscriptionBox" PlaceholderText="https://... или vless://..." />
+                            <TextBlock Style="{StaticResource Hint}" Margin="2,8,0,12"
+                                       Text="Ссылка на подписку или на один сервер. Хранится только на этом компьютере." />
+                            <Button Style="{StaticResource SecondaryButton}" Content="Сохранить и загрузить серверы"
+                                    HorizontalAlignment="Left" Click="OnSaveSubscriptionClick" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Поведение" Style="{StaticResource SectionLabel}" />
+                    <Border Style="{StaticResource Group}">
+                        <StackPanel>
+                            <Border Style="{StaticResource Row}">
+                                <DockPanel>
+                                    <ui:ToggleSwitch x:Name="TrayToggle" DockPanel.Dock="Right" Click="OnBehaviorChanged" />
+                                    <TextBlock Text="Сворачивать в трей при закрытии" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource LastRow}">
+                                <DockPanel>
+                                    <ui:ToggleSwitch x:Name="AutoConnectToggle" DockPanel.Dock="Right" Click="OnBehaviorChanged" />
+                                    <TextBlock Text="Подключаться при запуске" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="Если стоит zapret" Style="{StaticResource SectionLabel}" />
+                    <Border Style="{StaticResource Group}">
+                        <TextBlock x:Name="ZapretHint" Style="{StaticResource Hint}" FontSize="13" Margin="16,14" />
+                    </Border>
+
+                    <TextBlock Text="О программе" Style="{StaticResource SectionLabel}" />
+                    <Border Style="{StaticResource Group}">
+                        <StackPanel>
+                            <Border Style="{StaticResource Row}">
+                                <DockPanel>
+                                    <Button x:Name="CheckUpdatesButton" DockPanel.Dock="Right" Style="{StaticResource LinkButton}"
+                                            Content="Проверить обновления" Click="OnCheckUpdatesClick" />
+                                    <TextBlock x:Name="VersionText" Style="{StaticResource RowTitle}" TextWrapping="Wrap" Margin="0,0,12,0" />
+                                </DockPanel>
+                            </Border>
+                            <Border Style="{StaticResource LastRow}">
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Открыть" Click="OnOpenDataClick" />
+                                    <TextBlock Text="Папка с данными и логами" Style="{StaticResource RowTitle}" />
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

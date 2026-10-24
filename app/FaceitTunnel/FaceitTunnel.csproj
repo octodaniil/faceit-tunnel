@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>FaceitTunnel</RootNamespace>
+    <AssemblyName>FaceitTunnel</AssemblyName>
+    <Product>Faceit Tunnel</Product>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>FaceitTunnel.Program</StartupObject>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SatelliteResourceLanguages>ru;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Своя точка входа (Program.Main) нужна Velopack, поэтому App.xaml — обычная страница. -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <!-- sing-box кладётся рядом с exe; скачивается скриптом build.ps1 -->
+    <None Include="..\..\bin\sing-box.exe" Link="bin\sing-box.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\bin\sing-box.exe')" />
+    <None Include="..\..\bin\libcronet.dll" Link="bin\libcronet.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\bin\libcronet.dll')" />
+  </ItemGroup>
+
+</Project>

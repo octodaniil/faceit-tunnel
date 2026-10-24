@@ -1,0 +1,5 @@
+{
+  "domains": ["faceit.com", "faceit-cdn.net", "faceit.gg", "challenges.cloudflare.com"],
+  "cidrs": ["193.41.200.0/24"],
+  "processes": ["FACEIT.exe", "faceitclient.exe", "faceitservice.exe"]
+}
