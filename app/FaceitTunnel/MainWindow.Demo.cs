@@ -18,6 +18,25 @@ public partial class MainWindow
                 case "settings": NavSettings.IsChecked = true; break;
             }
         };
+        // Пример списка подписок и серверов без обращения к сети.
+        var home = new SubscriptionEntry { Name = "Дом", Source = "vless://x@188.134.83.31:443" };
+        var paper = new SubscriptionEntry { Name = "PaperVPN", Source = "https://apimf49f8737.azure-api.net/sub" };
+        SubscriptionList.ItemsSource = new[]
+        {
+            new SubscriptionRow(home, home.Name, Subscription.Describe(home.Source)),
+            new SubscriptionRow(paper, paper.Name, Subscription.Describe(paper.Source)),
+        };
+        SubscriptionsEmpty.Visibility = System.Windows.Visibility.Collapsed;
+        var servers = new[]
+        {
+            new ServerInfo { Name = "home", Group = "Дом" },
+            new ServerInfo { Name = "PaperVPN_US", Group = "PaperVPN" },
+            new ServerInfo { Name = "PaperVPN_DE", Group = "PaperVPN" },
+        };
+        ServerCombo.ItemsSource = servers;
+        ServerCombo.SelectedIndex = 0;
+        ServerHint.Text = "Серверов: 3 из подписок: 2. Лучше выбрать ближайший к вам.";
+
         var state = Program.Demo switch
         {
             "connected" => TunnelState.Connected,

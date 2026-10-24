@@ -26,6 +26,12 @@ public sealed record ServerInfo
     public string? HostHeader { get; init; }
     public string? ServiceName { get; init; }
 
+    /// <summary>Название подписки, из которой взят сервер.</summary>
+    public string Group { get; init; } = "";
+
+    /// <summary>Уникален среди всех подписок: одинаковые названия серверов в разных подписках не путаются.</summary>
+    public string Key => $"{Group}|{Name}";
+
     public override string ToString() => Name;
 }
 
@@ -44,6 +50,17 @@ public static class Subscription
             text = await http.GetStringAsync(source);
         }
         return Parse(text);
+    }
+
+    /// <summary>Короткое описание источника без секретов: адрес подписки или сервера.</summary>
+    public static string Describe(string source)
+    {
+        source = source.Trim();
+        if (source.StartsWith("vless://", StringComparison.OrdinalIgnoreCase))
+            return ParseVlessLink(source) is { } s ? $"VLESS · {s.Server}" : "VLESS";
+        if (Uri.TryCreate(source, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
+            return uri.Host;
+        return "Список серверов";
     }
 
     public static List<ServerInfo> Parse(string text)

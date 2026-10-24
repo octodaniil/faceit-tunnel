@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
@@ -16,6 +17,8 @@ using Forms = System.Windows.Forms;
 namespace FaceitTunnel;
 
 public sealed record LogItem(string Time, string Text, Brush Brush);
+
+public sealed record SubscriptionRow(SubscriptionEntry Entry, string Name, string Detail);
 
 public partial class MainWindow : FluentWindow
 {
@@ -48,7 +51,6 @@ public partial class MainWindow : FluentWindow
         _loadingUi = true;
         ModeVpn.IsChecked = _settings.Mode == TunnelMode.Vpn;
         ModeDirect.IsChecked = _settings.Mode == TunnelMode.Direct;
-        SubscriptionBox.Password = _settings.Subscription;
         TrayToggle.IsChecked = _settings.MinimizeToTray;
         AutoConnectToggle.IsChecked = _settings.ConnectOnStart;
         VersionText.Text = $"Версия {_updater.CurrentVersion}";
@@ -81,11 +83,7 @@ public partial class MainWindow : FluentWindow
         var remote = await Rules.FetchRemoteAsync();
         if (remote != null) _rules = remote;
 
-        if (!string.IsNullOrWhiteSpace(_settings.Subscription))
-            await LoadServersAsync();
-        else
-            ServerHint.Text = "Вставьте подписку на вкладке «Настройки».";
-
+        await LoadServersAsync();
         if (_settings.ConnectOnStart) Connect();
 
         await CheckUpdatesAsync(silent: true);
@@ -256,7 +254,7 @@ public partial class MainWindow : FluentWindow
     private void OnServerChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (_loadingUi || ServerCombo.SelectedItem is not ServerInfo server) return;
-        _settings.SelectedServer = server.Name;
+        _settings.SelectedServer = server.Key;
         _settings.Save();
         UpdateZapretHint();
         if (_settings.Mode == TunnelMode.Vpn) ReconnectIfConnected();
@@ -271,49 +269,66 @@ public partial class MainWindow : FluentWindow
 
     private async void OnRefreshServersClick(object sender, RoutedEventArgs e) => await LoadServersAsync();
 
+    /// <summary>Собирает серверы из всех подписок; одна сломанная подписка не мешает остальным.</summary>
     private async Task LoadServersAsync()
     {
-        if (string.IsNullOrWhiteSpace(_settings.Subscription))
+        RefreshSubscriptionList();
+        if (_settings.Subscriptions.Count == 0)
         {
-            ServerHint.Text = "Вставьте подписку на вкладке «Настройки».";
+            _servers = new List<ServerInfo>();
+            ServerCombo.ItemsSource = _servers;
+            ServerHint.Text = "Добавьте подписку или ключ на вкладке «Настройки».";
+            UpdateZapretHint();
             return;
         }
+
         RefreshButton.IsEnabled = false;
-        ServerHint.Text = "Загружаю подписку…";
-        try
+        ServerHint.Text = "Загружаю подписки…";
+        var servers = new List<ServerInfo>();
+        var failed = new List<string>();
+        foreach (var entry in _settings.Subscriptions)
         {
-            _servers = await Subscription.LoadAsync(_settings.Subscription);
-            _loadingUi = true;
-            ServerCombo.ItemsSource = _servers;
-            ServerCombo.SelectedItem = _servers.FirstOrDefault(s => s.Name == _settings.SelectedServer) ?? _servers.FirstOrDefault();
-            _loadingUi = false;
-            if (ServerCombo.SelectedItem is ServerInfo selected && selected.Name != _settings.SelectedServer)
+            try
             {
-                _settings.SelectedServer = selected.Name;
-                _settings.Save();
+                var loaded = await Subscription.LoadAsync(entry.Source);
+                servers.AddRange(loaded.Select(s => s with { Group = entry.Name }));
             }
-            ServerHint.Text = _servers.Count == 0
-                ? "В подписке нет серверов VLESS."
-                : $"Серверов в подписке: {_servers.Count}. Лучше выбрать ближайший к вам.";
-            UpdateZapretHint();
+            catch (Exception)
+            {
+                failed.Add(entry.Name);
+            }
         }
-        catch (Exception ex)
+
+        _servers = servers;
+        _loadingUi = true;
+        ServerCombo.ItemsSource = _servers;
+        // Старые настройки хранили только имя сервера, поэтому ищем и по нему.
+        ServerCombo.SelectedItem = _servers.FirstOrDefault(s => s.Key == _settings.SelectedServer)
+            ?? _servers.FirstOrDefault(s => s.Name == _settings.SelectedServer)
+            ?? _servers.FirstOrDefault();
+        _loadingUi = false;
+        if (ServerCombo.SelectedItem is ServerInfo selected && selected.Key != _settings.SelectedServer)
         {
-            ServerHint.Text = "Не удалось загрузить подписку: " + ex.Message;
+            _settings.SelectedServer = selected.Key;
+            _settings.Save();
         }
-        finally
-        {
-            _loadingUi = false;
-            RefreshButton.IsEnabled = true;
-        }
+
+        var hint = _servers.Count == 0
+            ? "В подписках нет серверов VLESS."
+            : $"Серверов: {_servers.Count} из подписок: {_settings.Subscriptions.Count}. Лучше выбрать ближайший к вам.";
+        if (failed.Count > 0) hint += $"\nНе загрузилось: {string.Join(", ", failed)}.";
+        ServerHint.Text = hint;
+        RefreshButton.IsEnabled = true;
+        UpdateZapretHint();
     }
 
     private void UpdateZapretHint()
     {
         var server = ServerCombo.SelectedItem as ServerInfo;
-        var vpnPart = server == null
+        // Пустой адрес Dns.GetHostAddresses превращает в адреса этого компьютера — такой подсказке верить нельзя.
+        var vpnPart = string.IsNullOrWhiteSpace(server?.Server)
             ? "В режиме VPN добавьте IP своего VPN-сервера в lists\\ipset-exclude.txt."
-            : $"В режиме VPN добавьте {ResolveIp(server.Server)} в lists\\ipset-exclude.txt и перезапустите zapret.";
+            : $"В режиме VPN добавьте {ResolveIp(server!.Server)} в lists\\ipset-exclude.txt и перезапустите zapret.";
         ZapretHint.Text = vpnPart + "\nFaceit не должен быть в списках zapret (list-general.txt, ipset-all.txt) — им занимается Faceit Tunnel.";
     }
 
@@ -332,11 +347,77 @@ public partial class MainWindow : FluentWindow
 
     // ---------- Настройки ----------
 
-    private async void OnSaveSubscriptionClick(object sender, RoutedEventArgs e)
+    private void RefreshSubscriptionList()
     {
-        _settings.Subscription = SubscriptionBox.Password.Trim();
-        _settings.SelectedServer = "";
+        SubscriptionList.ItemsSource = _settings.Subscriptions
+            .Select(e => new SubscriptionRow(e, e.Name, Subscription.Describe(e.Source)))
+            .ToList();
+        SubscriptionsEmpty.Visibility = _settings.Subscriptions.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnAddSubscriptionClick(object sender, RoutedEventArgs e)
+    {
+        var source = NewSubscriptionLink.Password.Trim();
+        if (!Regex.IsMatch(source, "^(https?|vless)://", RegexOptions.IgnoreCase))
+        {
+            ShowAddError("Вставьте ссылку, которая начинается с https:// или vless://.");
+            return;
+        }
+        if (_settings.Subscriptions.Any(s => s.Source == source))
+        {
+            ShowAddError("Эта подписка уже добавлена.");
+            return;
+        }
+
+        AddSubscriptionButton.IsEnabled = false;
+        AddSubscriptionHint.Text = "Проверяю ссылку…";
+        AddSubscriptionHint.Foreground = Gray;
+        try
+        {
+            // Сначала убеждаемся, что ссылка рабочая, и только потом сохраняем.
+            var servers = await Subscription.LoadAsync(source);
+            if (servers.Count == 0)
+            {
+                ShowAddError("По ссылке нет серверов VLESS.");
+                return;
+            }
+
+            var name = NewSubscriptionName.Text.Trim();
+            if (name.Length == 0) name = Subscription.Describe(source);
+            var baseName = name;
+            for (var i = 2; _settings.Subscriptions.Any(s => s.Name == name); i++) name = $"{baseName} {i}";
+
+            _settings.Subscriptions.Add(new SubscriptionEntry { Name = name, Source = source });
+            _settings.Save();
+            NewSubscriptionName.Text = "";
+            NewSubscriptionLink.Password = "";
+            AddSubscriptionHint.Text = $"Добавлено: {name}, серверов: {servers.Count}.";
+            AddSubscriptionHint.Foreground = Green;
+            await LoadServersAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAddError("Не удалось загрузить ссылку: " + ex.Message);
+        }
+        finally
+        {
+            AddSubscriptionButton.IsEnabled = true;
+        }
+    }
+
+    private void ShowAddError(string message)
+    {
+        AddSubscriptionHint.Text = message;
+        AddSubscriptionHint.Foreground = Red;
+    }
+
+    private async void OnRemoveSubscriptionClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not SubscriptionEntry entry) return;
+        _settings.Subscriptions.Remove(entry);
         _settings.Save();
+        AddSubscriptionHint.Text = $"Удалено: {entry.Name}.";
+        AddSubscriptionHint.Foreground = Gray;
         await LoadServersAsync();
     }
 
