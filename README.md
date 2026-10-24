@@ -64,6 +64,20 @@ curl.exe -s -o NUL -m 10 -w "HTTP=%{http_code} exit=" https://www.faceit.com/; $
 
 Всё остальное идёт напрямую. Списки задаются в начале `faceit-tunnel.ps1`.
 
+## Свой VPN-сервер дома
+
+Если у знакомого Faceit открывается без VPN, его домашний Linux (Debian/Ubuntu) может стать
+сервером: Faceit будет видеть IP и страну этого дома. Нужен белый IP (внешний адрес, на который
+можно подключиться из интернета) и проброс TCP-порта 443 на роутере.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/octodaniil/faceit-tunnel/main/server/install-server.sh -o install-server.sh
+sudo bash install-server.sh
+```
+
+Скрипт ставит sing-box с VLESS + REALITY, закрывает доступ к домашней сети через VPN
+и печатает ссылку `vless://...` — её вставляют в `change-subscription.bat`.
+
 ## Если что-то не работает
 
 - Закройте окно туннеля и запустите `diagnose.bat` (права администратора не нужны).
