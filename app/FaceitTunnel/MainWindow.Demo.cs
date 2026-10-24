@@ -33,8 +33,11 @@ public partial class MainWindow
             new ServerInfo { Name = "PaperVPN_US", Group = "PaperVPN" },
             new ServerInfo { Name = "PaperVPN_DE", Group = "PaperVPN" },
         };
+        // Под флагом загрузки — иначе выбор примера сервера запишется в настоящие настройки.
+        _loadingUi = true;
         ServerCombo.ItemsSource = servers;
         ServerCombo.SelectedIndex = 0;
+        _loadingUi = false;
         ServerHint.Text = "Серверов: 3 из подписок: 2. Лучше выбрать ближайший к вам.";
 
         var state = Program.Demo switch
